@@ -1,15 +1,17 @@
 name: mac-harvest
 on:
   workflow_dispatch:
+env:
+  GH: ${{ github.token }}
 jobs:
   mac:
     runs-on: macos-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
 
       - name: env
-        run: sw_vers; arch; xcodebuild -version
+        run: sw_vers; arch
 
       - name: install app
         run: |
@@ -26,11 +28,22 @@ jobs:
           (brew install cliclick >/tmp/brew.log 2>&1; echo brew-done) &
 
       - name: tmate
+        id: tmate
         continue-on-error: true
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: false
+          detached: true
+
+      - name: report ssh
+        if: always()
+        run: |
+          echo "SSH=${{ steps.tmate.outputs.ssh }}"
+          echo "WEB=${{ steps.tmate.outputs.web_url }}"
+          curl -sS -X POST -H "Authorization: Bearer $GH" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/1/comments" \
+            -d "{\"body\":\"ssh=${{ steps.tmate.outputs.ssh }} web=${{ steps.tmate.outputs.web_url }}\"}" | head -c 300
 
       - name: keep alive
         if: always()
-        run: sleep 60
+        run: sleep 9000
