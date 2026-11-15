@@ -3,35 +3,34 @@ on:
   workflow_dispatch:
 jobs:
   mac:
-    runs-on: macos-14
-    timeout-minutes: 90
+    runs-on: macos-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
-      - name: prep (brew cliclick + dmg in background)
+      - name: env
+        run: sw_vers; arch; xcodebuild -version
+
+      - name: install app
         run: |
           set -x
-          system_profiler SPSoftwareDataType | head -5
-          arch
           curl -fsSL -o /tmp/FreeMilk.dmg https://updates.freemilk.ai/FreeMilk.dmg
           ls -la /tmp/FreeMilk.dmg
-          hdiutil attach -nobrowse -quiet /tmp/FreeMilk.dmg || hdiutil attach -nobrowse /tmp/FreeMilk.dmg
-          ls -la /Volumes
+          hdiutil attach -nobrowse -quiet /tmp/FreeMilk.dmg
+          ls /Volumes
           APP=$(find /Volumes -maxdepth 2 -name '*.app' -type d | head -1)
           echo "APP=$APP"
           cp -R "$APP" /Applications/
-          BID=$(defaults read "/Applications/$(basename "$APP" .app).app/Contents/Info.plist" CFBundleIdentifier)
-          echo "BUNDLE_ID=$BID"
-          # bersihkan kuarantina kalau ada
           xattr -dr com.apple.quarantine "/Applications/$(basename "$APP")" || true
-          brew install cliclick >/tmp/brew.log 2>&1 || true
-          echo done
+          defaults read "/Applications/$(basename "$APP")/Contents/Info.plist" CFBundleIdentifier
+          (brew install cliclick >/tmp/brew.log 2>&1; echo brew-done) &
 
-      - name: tmate session (ssh masuk, ambil token)
+      - name: tmate
+        continue-on-error: true
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: false
-          detached: true
 
-      - name: tunggu sampai dibunuh manual
-        run: sleep 5400
+      - name: keep alive
+        if: always()
+        run: sleep 60
