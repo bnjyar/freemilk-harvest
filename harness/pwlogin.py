@@ -3,7 +3,7 @@
 usage: python3 pwlogin.py <authorize-url> <email> <password>
 Prints progress to stdout; the redirect URL is printed as "REDIRECT <url>".
 """
-import sys, time
+import os, sys, time
 from playwright.sync_api import sync_playwright
 
 url, email, password = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -13,7 +13,7 @@ def log(*a):
     print(*a, flush=True)
 
 with sync_playwright() as p:
-    b = p.chromium.launch(headless=True, args=[
+    b = p.chromium.launch(headless=(os.environ.get("HEADLESS","1")=="1"), args=[
         "--no-sandbox", "--disable-blink-features=AutomationControlled",
         "--disable-dev-shm-usage"])
     ctx = b.new_context(
