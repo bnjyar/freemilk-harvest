@@ -4,12 +4,13 @@ set -eu
 R=bnjyar/freemilk-harvest
 API=https://api.github.com/repos/$R/issues/1/comments
 g() { curl -sS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$@"; }
-last=$(g "$API?per_page=1" | python3 -c 'import sys,json;c=json.load(sys.stdin);print(c[0]["id"] if c else 0)')
-body=$(CMD="$1" python3 -c 'import os,json,base64;print(json.dumps({"body":"!b64:"+base64.b64encode(os.environ["CMD"].encode()).decode()}))')
+last=$(g "$API?per_page=100&sort=created&direction=desc" | python3 -c 'import sys,json;c=json.load(sys.stdin);print(max([x["id"] for x in c]) if c else 0)')
+cmd=$(cat)
+body=$(CMD="$cmd" python3 -c 'import os,json,base64;print(json.dumps({"body":"!b64:"+base64.b64encode(os.environ["CMD"].encode()).decode()}))')
 g -X POST "$API" -d "$body" >/dev/null
 for i in $(seq 1 200); do
   sleep 3
-  out=$(g "$API?per_page=30" | LAST="$last" python3 -c '
+  out=$(g "$API?per_page=50&sort=created&direction=desc" | LAST="$last" python3 -c '
 import sys,json,os
 last=int(os.environ["LAST"]); cs=json.load(sys.stdin)
 for c in cs:
