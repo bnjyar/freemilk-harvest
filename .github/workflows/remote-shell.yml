@@ -1,0 +1,29 @@
+name: remote-shell
+on:
+  workflow_dispatch:
+env:
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  shell:
+    runs-on: macos-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install app
+        run: |
+          set -x
+          sw_vers; arch
+          curl -fsSL -o /tmp/FreeMilk.dmg https://updates.freemilk.ai/FreeMilk.dmg
+          hdiutil attach -nobrowse -quiet /tmp/FreeMilk.dmg
+          ls /Volumes
+          APP=$(find /Volumes -maxdepth 2 -name '*.app' -type d | head -1)
+          echo "APP=$APP"
+          cp -R "$APP" /Applications/
+          xattr -dr com.apple.quarantine "/Applications/$(basename "$APP")" || true
+          defaults read "/Applications/$(basename "$APP")/Contents/Info.plist" CFBundleIdentifier
+          brew install cliclick >/tmp/brew.log 2>&1 || true
+          echo READY
+
+      - name: remote shell over issue
+        run: python3 -u harness/remote_shell.py
